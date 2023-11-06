@@ -70,7 +70,7 @@ class ClientsTest extends TestCase
         );
     }
 
-    private function runTestWithClientThrowsHttpException(Client $client): void
+    public function runTestWithClientThrowsHttpException(Client $client): void
     {
         $filepath = dirname(__FILE__, 3) . '/data/this-file-does-not-exist';
 

@@ -181,19 +181,6 @@ class Sanitize implements RegistryAware
     }
 
     /**
-     * Set a PSR-18 client and PSR-17 factories
-     *
-     * Allows you to use your own HTTP client implementations.
-     */
-    final public function set_http_client(
-        ClientInterface $http_client,
-        RequestFactoryInterface $request_factory,
-        UriFactoryInterface $uri_factory
-    ): void {
-        $this->http_client = new Psr18Client($http_client, $request_factory, $uri_factory);
-    }
-
-    /**
      * @deprecated since SimplePie 1.9.0, use \SimplePie\Sanitize::set_http_client() instead.
      * @param class-string<File> $file_class
      * @param array<int, mixed> $curl_options
@@ -358,7 +345,7 @@ class Sanitize implements RegistryAware
             $domain = trim($domain, ". \t\n\r\0\x0B");
             $segments = array_reverse(explode('.', $domain));
             /** @var true|array<string, true|array<string, true|array<string, array<string, true|array<string, true|array<string, true>>>>>> */ // Needed for PHPStan.
-            $node = & $this->https_domains;
+            $node =& $this->https_domains;
             foreach ($segments as $segment) {//Build a tree
                 if ($node === true) {
                     break;
@@ -366,7 +353,7 @@ class Sanitize implements RegistryAware
                 if (!isset($node[$segment])) {
                     $node[$segment] = [];
                 }
-                $node = & $node[$segment];
+                $node =& $node[$segment];
             }
             $node = true;
         }
@@ -381,10 +368,10 @@ class Sanitize implements RegistryAware
     {
         $domain = trim($domain, '. ');
         $segments = array_reverse(explode('.', $domain));
-        $node = & $this->https_domains;
+        $node =& $this->https_domains;
         foreach ($segments as $segment) {//Explore the tree
             if (isset($node[$segment])) {
-                $node = & $node[$segment];
+                $node =& $node[$segment];
             } else {
                 break;
             }
@@ -781,6 +768,19 @@ class Sanitize implements RegistryAware
         }
 
         return $this->http_client;
+    }
+
+    /**
+     * Set a PSR-18 client and PSR-17 factories
+     *
+     * Allows you to use your own HTTP client implementations.
+     */
+    final public function set_http_client(
+        ClientInterface $http_client,
+        RequestFactoryInterface $request_factory,
+        UriFactoryInterface $uri_factory
+    ): void {
+        $this->http_client = new Psr18Client($http_client, $request_factory, $uri_factory);
     }
 }
 

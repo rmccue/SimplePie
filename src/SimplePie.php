@@ -24,7 +24,6 @@ use SimplePie\Exception\HttpException;
 use SimplePie\HTTP\Client;
 use SimplePie\HTTP\FileClient;
 use SimplePie\HTTP\Psr18Client;
-use SimplePie\HTTP\Response;
 
 /**
  * SimplePie
@@ -432,7 +431,7 @@ class SimplePie
     public $permanent_url = null;
 
     /**
-     * @var File Instance of File class to use as a feed
+     * @var HTTP\Response Instance of \SimplePie\HTTP\Response class to use as a feed
      * @see SimplePie::set_file()
      */
     private $file;
@@ -648,6 +647,7 @@ class SimplePie
 
     /**
      * @var Client|null
+     * @see SimplePie::set_http_client()
      */
     private $http_client = null;
 
@@ -782,7 +782,6 @@ class SimplePie
      *
      * @deprecated since SimplePie 1.9.0, use \SimplePie\SimplePie::set_http_client() or \SimplePie\SimplePie::set_raw_data() instead.
      *
-     * @param File &$file
      * @return bool True on success, false on failure
      */
     public function set_file(File &$file)
@@ -791,7 +790,7 @@ class SimplePie
 
         $this->feed_url = $file->get_final_requested_uri();
         $this->permanent_url = $this->feed_url;
-        $this->file = & $file;
+        $this->file =& $file;
 
         return true;
     }
@@ -816,20 +815,6 @@ class SimplePie
     }
 
     /**
-     * Set a PSR-18 client and PSR-17 factories
-     *
-     * Allows you to use your own HTTP client implementations.
-     * This will become required with SimplePie 2.0.0.
-     */
-    final public function set_http_client(
-        ClientInterface $http_client,
-        RequestFactoryInterface $request_factory,
-        UriFactoryInterface $uri_factory
-    ): void {
-        $this->http_client = new Psr18Client($http_client, $request_factory, $uri_factory);
-    }
-
-    /**
      * Set the default timeout for fetching remote feeds
      *
      * This allows you to change the maximum time the feed's server to respond
@@ -850,19 +835,6 @@ class SimplePie
         }
 
         $this->timeout = (int) $timeout;
-
-        // Reset a possible existing FileClient,
-        // so a new client with the changed value will be created
-        if (is_object($this->http_client) && $this->http_client instanceof FileClient) {
-            $this->http_client = null;
-        } elseif (is_object($this->http_client)) {
-            // Trigger notice if a PSR-18 client was set
-            trigger_error(sprintf(
-                'Using "%s()" has no effect, because you already provided a HTTP client with "%s::set_http_client()". Configure the timeout in your HTTP client instead.',
-                __METHOD__,
-                get_class($this)
-            ), \E_USER_NOTICE);
-        }
     }
 
     /**
@@ -885,19 +857,6 @@ class SimplePie
         }
 
         $this->curl_options = $curl_options;
-
-        // Reset a possible existing FileClient,
-        // so a new client with the changed value will be created
-        if (is_object($this->http_client) && $this->http_client instanceof FileClient) {
-            $this->http_client = null;
-        } elseif (is_object($this->http_client)) {
-            // Trigger notice if a PSR-18 client was set
-            trigger_error(sprintf(
-                'Using "%s()" has no effect, because you already provided a HTTP client with "%s::set_http_client()". Configure the curl options in your HTTP client instead.',
-                __METHOD__,
-                get_class($this)
-            ), \E_USER_NOTICE);
-        }
     }
 
     /**
@@ -918,19 +877,6 @@ class SimplePie
         }
 
         $this->force_fsockopen = $enable;
-
-        // Reset a possible existing FileClient,
-        // so a new client with the changed value will be created
-        if (is_object($this->http_client) && $this->http_client instanceof FileClient) {
-            $this->http_client = null;
-        } elseif (is_object($this->http_client)) {
-            // Trigger notice if a PSR-18 client was set
-            trigger_error(sprintf(
-                'Using "%s()" has no effect, because you already provided a HTTP client with "%s::set_http_client()". Configure fsockopen in your HTTP client instead.',
-                __METHOD__,
-                get_class($this)
-            ), \E_USER_NOTICE);
-        }
     }
 
     /**
@@ -1383,19 +1329,6 @@ class SimplePie
         }
 
         $this->useragent = (string) $ua;
-
-        // Reset a possible existing FileClient,
-        // so a new client with the changed value will be created
-        if (is_object($this->http_client) && $this->http_client instanceof FileClient) {
-            $this->http_client = null;
-        } elseif (is_object($this->http_client)) {
-            // Trigger notice if a PSR-18 client was set
-            trigger_error(sprintf(
-                'Using "%s()" has no effect, because you already provided a HTTP client with "%s::set_http_client()". Configure the useragent in your HTTP client instead.',
-                __METHOD__,
-                get_class($this)
-            ), \E_USER_NOTICE);
-        }
     }
 
     /**
@@ -1958,7 +1891,7 @@ class SimplePie
         // If we don't already have the file (it'll only exist if we've opened it to check if the cache has been modified), open it.
         if (!isset($file)) {
             if ($this->file instanceof File && $this->file->get_final_requested_uri() === $this->feed_url) {
-                $file = & $this->file;
+                $file =& $this->file;
             } elseif (isset($failedFileReason)) {
                 // Do not try to fetch again if we already failed once.
                 // If the file connection had an error, set SimplePie::error to that and quit
@@ -1989,13 +1922,15 @@ class SimplePie
 
         if (!$this->force_feed) {
             // Check if the supplied URL is a feed, if it isn't, look for it.
+            $response = (! $file instanceof File) ? File::fromResponse($file) : $file;
             $locate = $this->registry->create(Locator::class, [
-                (! $file instanceof File) ? File::fromResponse($file) : $file,
+                $response,
                 $this->timeout,
                 $this->useragent,
                 $this->max_checked_feeds,
                 $this->force_fsockopen,
-                $this->curl_options
+                $this->curl_options,
+                $this->get_http_client()
             ]);
 
             $http_client = $this->get_http_client();
@@ -2088,7 +2023,8 @@ class SimplePie
             $headers[$key] = implode(', ', $values);
         }
 
-        $sniffer = $this->registry->create(Sniffer::class, [&$file]);
+        $fileResponse = File::fromResponse($file);
+        $sniffer = $this->registry->create(Sniffer::class, [$fileResponse]);
         $sniffed = $sniffer->get_type();
 
         return [$headers, $sniffed];
@@ -2826,12 +2762,12 @@ class SimplePie
                 if ($this->registry->call(Misc::class, 'is_isegment_nz_nc', [$key])) {
                     if (isset($this->data['links'][self::IANA_LINK_RELATIONS_REGISTRY . $key])) {
                         $this->data['links'][self::IANA_LINK_RELATIONS_REGISTRY . $key] = array_merge($this->data['links'][$key], $this->data['links'][self::IANA_LINK_RELATIONS_REGISTRY . $key]);
-                        $this->data['links'][$key] = & $this->data['links'][self::IANA_LINK_RELATIONS_REGISTRY . $key];
+                        $this->data['links'][$key] =& $this->data['links'][self::IANA_LINK_RELATIONS_REGISTRY . $key];
                     } else {
-                        $this->data['links'][self::IANA_LINK_RELATIONS_REGISTRY . $key] = & $this->data['links'][$key];
+                        $this->data['links'][self::IANA_LINK_RELATIONS_REGISTRY . $key] =& $this->data['links'][$key];
                     }
                 } elseif (substr($key, 0, 41) === self::IANA_LINK_RELATIONS_REGISTRY) {
-                    $this->data['links'][substr($key, 41)] = & $this->data['links'][$key];
+                    $this->data['links'][substr($key, 41)] =& $this->data['links'][$key];
                 }
                 $this->data['links'][$key] = array_unique($this->data['links'][$key]);
             }
@@ -3379,8 +3315,6 @@ class SimplePie
      *
      * There is no way to find PuSH links in the body of a microformats feed,
      * so they are added to the headers when found, to be used later by get_links.
-     * @param string $hub
-     * @param string $self
      */
     private function store_links(File &$file, string $hub, string $self): void
     {
@@ -3446,6 +3380,21 @@ class SimplePie
         }
 
         return $this->http_client;
+    }
+
+    /**
+     * Set a PSR-18 client and PSR-17 factories
+     *
+     * Allows you to use your own HTTP client implementations.
+     * This will become required with SimplePie 2.0.0.
+     */
+    final public function set_http_client(
+        ClientInterface $http_client,
+        RequestFactoryInterface $request_factory,
+        UriFactoryInterface $uri_factory
+    ): void {
+        $this->http_client_injected = true;
+        $this->http_client = new Psr18Client($http_client, $request_factory, $uri_factory);
     }
 }
 

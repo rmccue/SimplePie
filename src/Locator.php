@@ -7,15 +7,14 @@ declare(strict_types=1);
 
 namespace SimplePie;
 
-use DomDocument;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\UriFactoryInterface;
 use SimplePie\Exception\HttpException;
+use SimplePie\File;
 use SimplePie\HTTP\Client;
 use SimplePie\HTTP\FileClient;
 use SimplePie\HTTP\Psr18Client;
-use SimplePie\HTTP\Response;
 
 /**
  * Used for feed auto-discovery
@@ -26,9 +25,9 @@ use SimplePie\HTTP\Response;
 class Locator implements RegistryAware
 {
     /** @var ?string */
-    public $useragent = null;
+    public $useragent;
     /** @var int */
-    public $timeout = 10;
+    public $timeout;
     /** @var File */
     public $file;
     /** @var string[] */
@@ -91,19 +90,6 @@ class Locator implements RegistryAware
     }
 
     /**
-     * Set a PSR-18 client and PSR-17 factories
-     *
-     * Allows you to use your own HTTP client implementations.
-     */
-    final public function set_http_client(
-        ClientInterface $http_client,
-        RequestFactoryInterface $request_factory,
-        UriFactoryInterface $uri_factory
-    ): void {
-        $this->http_client = new Psr18Client($http_client, $request_factory, $uri_factory);
-    }
-
-    /**
      * @return void
      */
     public function set_registry(\SimplePie\Registry $registry)
@@ -163,7 +149,8 @@ class Locator implements RegistryAware
     public function is_feed(Response $file, bool $check_html = false)
     {
         if (Misc::is_remote_uri($file->get_final_requested_uri())) {
-            $sniffer = $this->registry->create(Content\Type\Sniffer::class, [$file]);
+            $fileResponse = File::fromResponse($file);
+            $sniffer = $this->registry->create(Content\Type\Sniffer::class, [$fileResponse]);
             $sniffed = $sniffer->get_type();
             $mime_types = ['application/rss+xml', 'application/rdf+xml',
                                 'text/rdf', 'application/atom+xml', 'text/xml',
@@ -449,6 +436,19 @@ class Locator implements RegistryAware
         }
 
         return $this->http_client;
+    }
+
+    /**
+     * Set a PSR-18 client and PSR-17 factories
+     *
+     * Allows you to use your own HTTP client implementations.
+     */
+    final public function set_http_client(
+        ClientInterface $http_client,
+        RequestFactoryInterface $request_factory,
+        UriFactoryInterface $uri_factory
+    ): void {
+        $this->http_client = new Psr18Client($http_client, $request_factory, $uri_factory);
     }
 }
 

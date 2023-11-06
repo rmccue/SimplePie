@@ -27,7 +27,7 @@ class File implements Response
     public $url;
 
     /**
-     * @var ?string User agent to use in requests
+     * @var string User agent to use in requests
      * @deprecated Set the user agent in constructor.
      */
     public $useragent;
@@ -265,7 +265,7 @@ class File implements Response
             }
         } else {
             $this->method = \SimplePie\SimplePie::FILE_SOURCE_LOCAL | \SimplePie\SimplePie::FILE_SOURCE_FILE_GET_CONTENTS;
-            if (empty($url) || ! is_readable($url) ||  false === $filebody = file_get_contents($url)) {
+            if (empty($url) || ! is_readable($url) || false === ($filebody = file_get_contents($url))) {
                 $this->body = '';
                 $this->error = sprintf('file "%s" is not readable', $url);
                 $this->success = false;
@@ -445,10 +445,8 @@ class File implements Response
      */
     final public static function fromResponse(Response $response): self
     {
-        $headers = [];
-
-        foreach ($response->get_headers() as $name => $header) {
-            $headers[$name] = implode(', ', $header);
+        if ($response instanceof self) {
+            return $response;
         }
 
         /** @var File */
@@ -456,7 +454,7 @@ class File implements Response
 
         $file->url = $response->get_final_requested_uri();
         $file->useragent = null;
-        $file->headers = $headers;
+        $file->set_headers($response->get_headers());
         $file->body = $response->get_body_content();
         $file->status_code = $response->get_status_code();
         $file->permanent_url = $response->get_permanent_uri();

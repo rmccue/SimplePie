@@ -13,6 +13,7 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\UriFactoryInterface;
 use SimplePie\Exception\HttpException;
+use SimplePie\Misc;
 use Throwable;
 
 /**
@@ -22,24 +23,16 @@ use Throwable;
  */
 final class Psr18Client implements Client
 {
-    /**
-     * @var ClientInterface
-     */
+    /** @var ClientInterface */
     private $httpClient;
 
-    /**
-     * @var RequestFactoryInterface
-     */
+    /** @var RequestFactoryInterface */
     private $requestFactory;
 
-    /**
-     * @var UriFactoryInterface
-     */
+    /** @var UriFactoryInterface */
     private $uriFactory;
 
-    /**
-     * @var int
-     */
+    /** @var int */
     private $allowedRedirects = 5;
 
     public function __construct(ClientInterface $httpClient, RequestFactoryInterface $requestFactory, UriFactoryInterface $uriFactory)
@@ -69,7 +62,7 @@ final class Psr18Client implements Client
      *
      * @param Client::METHOD_* $method
      * @param string $url
-     * @param array<string,string|string[]> $headers
+     * @param string[] $headers
      *
      * @throws HttpException if anything goes wrong requesting the data
      */
@@ -83,16 +76,13 @@ final class Psr18Client implements Client
             ), 1);
         }
 
-        if (preg_match('/^http(s)?:\/\//i', $url)) {
+        if (Misc::is_remote_uri($url)) {
             return $this->requestUrl($method, $url, $headers);
         }
 
         return $this->requestLocalFile($url);
     }
 
-    /**
-     * @param array<string,string|string[]> $headers
-     */
     private function requestUrl(string $method, string $url, array $headers): Response
     {
         $permanentUrl = $url;
@@ -120,7 +110,7 @@ final class Psr18Client implements Client
             $statusCode = $response->getStatusCode();
 
             // If we have a redirect
-            if (in_array($statusCode, [300, 301, 302, 303, 307]) && $response->hasHeader('Location')) {
+            if (in_array($statusCode, [300, 301, 302, 303, 307, 308]) && $response->hasHeader('Location')) {
                 // Prevent infinity redirect loops
                 if ($remainingRedirects <= 0) {
                     break;
@@ -131,7 +121,7 @@ final class Psr18Client implements Client
 
                 $requestedUrl = $response->getHeaderLine('Location');
 
-                if ($statusCode === 301) {
+                if ($statusCode === 301 || $statusCode === 308) {
                     $permanentUrl = $requestedUrl;
                 }
 
@@ -144,10 +134,6 @@ final class Psr18Client implements Client
 
     private function requestLocalFile(string $path): Response
     {
-        if (! is_readable($path)) {
-            throw new HttpException(sprintf('file "%s" is not readable', $path));
-        }
-
         try {
             $raw = file_get_contents($path);
         } catch (Throwable $th) {
