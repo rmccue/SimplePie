@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `element_implode`
   - `percent_encoding_normalization`
   - `strip_comments`
+  - `uncomment_rfc822`
 
   If you need any of them, consider copying the function to your codebase. ([#899](https://github.com/simplepie/simplepie/pull/899))
 - The method `SimplePie\SimplePie::set_file()` is deprecated, use `SimplePie\SimplePie::set_http_client()` or `SimplePie\SimplePie::set_raw_data()` instead
